@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Corrections Viewer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f6fa; color: #24292e; line-height: 1.6; }
+
+    .header {
+      background: #1a2332; color: white; padding: 14px 24px;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+    }
+    .header h1 { font-size: 17px; font-weight: 600; }
+    .header .meta { color: #8b949e; font-size: 13px; }
+    .header a { color: #58a6ff; text-decoration: none; font-size: 13px; }
+    .header a:hover { text-decoration: underline; }
+
+    .reviewer-bar {
+      background: white; border-bottom: 1px solid #e1e4e8; padding: 10px 24px;
+      font-size: 13px; color: #586069;
+    }
+    .reviewer-bar strong { color: #24292e; }
+
+    .content { max-width: 900px; margin: 0 auto; padding: 24px; }
+
+    .comment-block {
+      background: white; border: 1px solid #e1e4e8; border-radius: 8px;
+      margin-bottom: 12px; overflow: hidden; transition: all 0.3s;
+    }
+    .comment-block.highlighted {
+      border-color: #0366d6; box-shadow: 0 0 0 3px rgba(3,102,214,0.3);
+    }
+    .comment-block.highlighted .comment-header { background: #dceefb; }
+    .comment-header {
+      padding: 10px 16px; background: #f8f9fa; border-bottom: 1px solid #e1e4e8;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .comment-number {
+      background: #586069; color: white; width: 26px; height: 26px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;
+    }
+    .comment-block.highlighted .comment-number { background: #0366d6; }
+    .comment-subject { font-weight: 600; font-size: 14px; }
+    .comment-page { font-size: 12px; color: #586069; margin-left: auto; }
+    .no-action-badge { font-size: 10px; background: #e6f4ea; color: #1e7e34; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+
+    .comment-body { padding: 14px 16px; font-size: 14px; white-space: pre-wrap; }
+
+    .back-link { display: inline-block; margin-bottom: 16px; color: #0366d6; text-decoration: none; font-size: 14px; }
+    .back-link:hover { text-decoration: underline; }
+
+    .pdf-bar {
+      background: #f0f7ff; border: 1px solid #c8e1ff; border-radius: 6px;
+      padding: 10px 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;
+    }
+    .pdf-bar a {
+      color: #0366d6; text-decoration: none; font-size: 13px; font-weight: 500;
+      padding: 4px 12px; border: 1px solid #0366d6; border-radius: 4px;
+    }
+    .pdf-bar a:hover { background: #0366d6; color: white; }
+    .pdf-bar .label { font-size: 13px; color: #586069; flex: 1; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1 id="doc-title">Corrections Viewer</h1>
+      <div class="meta" id="doc-meta"></div>
+    </div>
+    <a href="/" id="back-link">&larr; Back to Tasks</a>
+  </div>
+  <div class="reviewer-bar" id="reviewer-bar"></div>
+  <div class="content">
+    <div class="pdf-bar" id="pdf-bar"></div>
+    <div id="comments-container"></div>
+  </div>
+
+  <script src="/corrections-data.js"></script>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const category = params.get('category');
+    const highlightIndex = parseInt(params.get('highlight')) || 0;
+
+    if (!category || !CORRECTIONS_DATA[category]) {
+      document.getElementById('comments-container').innerHTML = '<p>Category not found.</p>';
+    } else {
+      const doc = CORRECTIONS_DATA[category];
+
+      document.title = doc.title + ' - Corrections Viewer';
+      document.getElementById('doc-title').textContent = doc.title;
+      document.getElementById('doc-meta').textContent = `Review Date: ${doc.date}`;
+
+      const reviewerParts = [`<strong>Reviewer:</strong> ${doc.reviewer}`];
+      if (doc.email) reviewerParts.push(`<a href="mailto:${doc.email}">${doc.email}</a>`);
+      if (doc.phone) reviewerParts.push(doc.phone);
+      document.getElementById('reviewer-bar').innerHTML = reviewerParts.join(' &middot; ');
+
+      const pdfUrl = `/corrections/${encodeURIComponent(doc.pdf)}`;
+      document.getElementById('pdf-bar').innerHTML = `
+        <span class="label">Original City PDF: ${doc.pdf}</span>
+        <a href="${pdfUrl}" target="_blank">View PDF</a>
+        <a href="${pdfUrl}" download>Download</a>
+      `;
+
+      const container = document.getElementById('comments-container');
+      container.innerHTML = doc.comments.map(c => {
+        const isHighlighted = c.index === highlightIndex;
+        return `
+          <div class="comment-block ${isHighlighted ? 'highlighted' : ''}" id="comment-${c.index}">
+            <div class="comment-header">
+              <div class="comment-number">${c.index}</div>
+              <div class="comment-subject">${esc(c.subject)}</div>
+              ${c.noAction ? '<span class="no-action-badge">No Action Required</span>' : ''}
+              <div class="comment-page">${esc(c.page)}</div>
+            </div>
+            <div class="comment-body">${esc(c.text)}</div>
+          </div>
+        `;
+      }).join('');
+
+      // Scroll to highlighted comment
+      if (highlightIndex) {
+        const el = document.getElementById('comment-' + highlightIndex);
+        if (el) setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+      }
+    }
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+  </script>
+</body>
+</html>

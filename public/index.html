@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Richardson Lake Washington Project - Permit Feedback Tracker</title>
+  <style>
+    :root{--bg:#f5f6fa;--card:#fff;--border:#e1e4e8;--text:#24292e;--tl:#586069;--blue:#0366d6;--green:#28a745;--orange:#e36209;--red:#cb2431;--purple:#6f42c1}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+
+    /* LOGIN */
+    .login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a2332,#2d3748)}
+    .login-card{background:#fff;border-radius:16px;padding:44px 36px;max-width:460px;width:92%;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,.3)}
+    .login-card h1{font-size:22px;margin-bottom:4px}
+    .login-card .addr{color:var(--tl);font-size:14px;margin-bottom:4px}
+    .login-card .permit{color:var(--blue);font-family:monospace;font-size:13px;margin-bottom:24px}
+    .login-card h2{font-size:14px;color:var(--tl);margin-bottom:12px;font-weight:500}
+    .people-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .person-btn{padding:12px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;font-size:15px;font-weight:600;transition:.15s;position:relative;text-align:left}
+    .person-btn:hover{border-color:var(--blue);color:var(--blue);background:#f0f7ff}
+    .person-btn .badge{position:absolute;top:8px;right:8px;background:var(--orange);color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;font-weight:700}
+    .person-btn .badge.done{background:var(--green)}
+    .person-btn .role{font-size:11px;color:var(--tl);font-weight:400;display:block;margin-top:1px}
+    .guest-link{display:block;margin-top:14px;color:var(--tl);font-size:13px;cursor:pointer;text-decoration:underline}
+
+    /* HEADER */
+    .header{background:#1a2332;color:#fff;padding:11px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+    .header h1{font-size:17px}.header .sub{color:#8b949e;font-size:12px}
+    .user-pill{display:flex;align-items:center;gap:8px}
+    .user-pill .uname{background:#58a6ff;color:#0d1117;padding:3px 12px;border-radius:12px;font-size:13px;font-weight:600}
+    .user-pill button{color:#8b949e;font-size:11px;cursor:pointer;text-decoration:underline;background:none;border:none}
+
+    /* TABS */
+    .tabs{background:#fff;border-bottom:1px solid var(--border);padding:0 24px;display:flex}
+    .tab{padding:11px 18px;font-size:14px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;color:var(--tl);transition:.15s}
+    .tab:hover{color:var(--text)}.tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+
+    /* PAGES */
+    .page{display:none}.page.active{display:block}
+
+    /* DASHBOARD */
+    .dash{padding:24px;max-width:1000px}
+    .dash h2{font-size:16px;margin-bottom:14px}
+    .stats-row{display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap}
+    .sc{background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 18px;min-width:95px;text-align:center}
+    .sc .n{font-size:26px;font-weight:700}.sc .l{font-size:10px;color:var(--tl);text-transform:uppercase;letter-spacing:.5px}
+    .sc.s-c .n{color:var(--green)}.sc.s-i .n{color:var(--blue)}.sc.s-p .n{color:var(--orange)}.sc.s-b .n{color:var(--red)}
+    .ptable{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+    .ptable th{text-align:left;padding:9px 14px;background:#f8f9fa;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--tl);border-bottom:1px solid var(--border)}
+    .ptable td{padding:9px 14px;border-bottom:1px solid #f0f0f0;font-size:14px}
+    .ptable tr:last-child td{border-bottom:none}
+    .ptable .pn{font-weight:600;cursor:pointer;color:var(--blue)}.ptable .pn:hover{text-decoration:underline}
+    .ptable .open-n{font-size:22px;font-weight:700}
+    .ptable .open-n.zero{color:var(--green)}.ptable .open-n.has{color:var(--orange)}
+    .pbar{height:7px;background:#e9ecef;border-radius:4px;overflow:hidden;width:140px}
+    .pbar .fill{height:100%;background:var(--green);border-radius:4px}
+
+    /* TASKS TOOLBAR & FILTERS */
+    .toolbar{background:#f8f9fa;border-bottom:1px solid var(--border);padding:10px 24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .btn{padding:6px 14px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--text);transition:.15s}
+    .btn:hover{border-color:var(--blue);color:var(--blue)}
+    .btn.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+    .spacer{flex:1}
+    .flabel{font-size:13px;color:var(--tl)}
+    .filters{padding:8px 24px;display:flex;gap:6px;flex-wrap:wrap}
+    .fc{padding:4px 12px;border:1px solid var(--border);border-radius:14px;font-size:12px;cursor:pointer;background:#fff;color:var(--tl);transition:.15s}
+    .fc:hover{border-color:var(--blue);color:var(--blue)}.fc.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+
+    /* TASK AREA */
+    .tasks-page{padding:0 24px 24px;max-width:1000px}
+    .section-title{font-size:15px;padding:12px 0 8px;font-weight:600}
+    .section-title.secondary{color:var(--tl);font-weight:500;border-top:1px solid var(--border);margin-top:12px;padding-top:16px}
+
+    /* CATEGORY */
+    .cat-section{margin-bottom:16px}
+    .cat-hdr{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:2px solid var(--border);margin-bottom:8px;cursor:pointer;user-select:none}
+    .cat-hdr h2{font-size:14px;font-weight:600}.cat-hdr .tog{color:var(--tl);font-size:11px}
+    .cat-prog{font-size:12px;color:var(--tl);margin-left:auto}
+    .cat-pdf{font-size:11px;color:var(--blue);border:1px solid var(--blue);padding:2px 10px;border-radius:10px;text-decoration:none;white-space:nowrap}
+    .cat-pdf:hover{background:var(--blue);color:#fff}
+
+    /* TASK CARD */
+    .tc{background:#fff;border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:8px;border-left:4px solid var(--border)}
+    .tc.s-completed{border-left-color:var(--green);background:#f0f0f0}
+    .tc.s-in_progress{border-left-color:var(--blue)}
+    .tc.s-pending{border-left-color:var(--orange)}
+    .tc.s-blocked{border-left-color:var(--red)}
+    .tc.mine{background:#f6fbff}
+    .tc-comment{font-size:13px;line-height:1.5}
+    .tc-comment .lbl{color:var(--tl);font-size:10px;text-transform:uppercase;letter-spacing:.3px;font-weight:600}
+    .tc-meta{display:flex;align-items:center;gap:7px;margin-top:8px;flex-wrap:wrap}
+    .owner-tag{display:inline-block;padding:2px 9px;border-radius:12px;font-size:11px;font-weight:600;cursor:pointer}
+    .meta-label{font-size:10px;color:var(--tl);font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+    .owner-select{-webkit-appearance:none;appearance:none;padding:3px 22px 3px 10px;border-radius:14px;font-size:11px;font-weight:600;border:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23666'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 6px center;background-size:8px}
+    .status-pill{-webkit-appearance:none;appearance:none;padding:3px 22px 3px 10px;border-radius:14px;font-size:11px;font-weight:600;border:2px solid;cursor:pointer;background-color:#fff;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23666'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 6px center;background-size:8px}
+    .status-pill.s-pending{color:var(--orange);border-color:var(--orange)}
+    .status-pill.s-in_progress{color:var(--blue);border-color:var(--blue)}
+    .status-pill.s-completed{color:var(--green);border-color:var(--green)}
+    .status-pill.s-blocked{color:var(--red);border-color:var(--red)}
+    .involved-tag{display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;cursor:pointer;border:1px dashed var(--border);color:var(--tl)}
+    .tc-notes{font-size:12px;color:var(--tl);font-style:italic;margin-top:5px;padding:4px 8px;background:#f8f9fa;border-radius:4px}
+    .tc-btn{font-size:11px;color:var(--blue);cursor:pointer;background:none;border:none;padding:2px 0}
+    .corr-link{font-size:11px;color:var(--blue);text-decoration:none;border:1px solid var(--blue);padding:1px 8px;border-radius:10px}
+    .corr-link:hover{background:var(--blue);color:#fff}
+
+    /* Owner colors */
+    .o-Karen{background:#dceefb;color:#0a5394}
+    .o-Ryan{background:#fce8e6;color:#a12e1f}
+    .o-Reid{background:#e6f4ea;color:#1e7e34}
+    .o-William{background:#fef3cd;color:#856404}
+    .o-JamesStrange{background:#e8daef;color:#6c3483}
+    .o-Rachel{background:#fadbd8;color:#922b21}
+    .o-Derek{background:#d1ecf1;color:#0c5460}
+    .o-SageStone{background:#d4efdf;color:#1a5e20}
+
+    /* TIMELINE (comments + history merged) */
+    .timeline{margin-top:10px;border-top:1px solid var(--border);padding-top:8px}
+    .tl-item{padding:5px 0;font-size:12px;display:flex;gap:8px;border-bottom:1px solid #f5f5f5}
+    .tl-item:last-of-type{border-bottom:none}
+    .tl-icon{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;margin-top:2px}
+    .tl-icon.comment-icon{background:#dceefb;color:#0a5394}
+    .tl-icon.status-icon{background:#e6f4ea;color:#1e7e34}
+    .tl-icon.owner-icon{background:#fef3cd;color:#856404}
+    .tl-icon.file-icon{background:#fadbd8;color:#922b21}
+    .tl-icon.create-icon{background:#e8daef;color:#6c3483}
+    .tl-body{flex:1;min-width:0}
+    .tl-header{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+    .tl-author{font-weight:600;color:var(--text)}
+    .tl-action{color:var(--tl)}
+    .tl-time{color:var(--tl);font-size:10px;margin-left:auto;white-space:nowrap}
+    .del-comment{background:none;border:none;color:var(--tl);font-size:14px;cursor:pointer;padding:0 4px;line-height:1;margin-left:4px;opacity:.4}
+    .del-comment:hover{opacity:1;color:var(--red)}
+    .tl-text{margin-top:2px;color:var(--text)}
+    .tl-mention{background:#fff3cd;padding:0 3px;border-radius:3px;font-weight:600;color:#856404}
+    .mention-alert{background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:6px 10px;margin-top:6px;font-size:12px;font-weight:500;color:#856404}
+
+    /* COMMENT INPUT */
+    .comment-box{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+    .comment-box textarea{padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;resize:vertical;min-height:36px}
+    .comment-box .actions{display:flex;gap:6px;align-items:center}
+    .comment-box .actions button{padding:5px 12px;background:var(--blue);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px}
+    .comment-box .actions .cancel-btn{background:#fff;color:var(--tl);border:1px solid var(--border)}
+    .comment-box .actions .cancel-btn:hover{border-color:var(--red);color:var(--red)}
+    .file-pick{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--blue)}
+    .file-pick input[type="file"]{width:0;height:0;overflow:hidden;position:absolute;opacity:0}
+    .file-pick::before{content:'Attach file';border:1px solid var(--border);padding:4px 10px;border-radius:4px;font-size:11px;color:var(--tl);background:#fff;cursor:pointer}
+    .file-pick:hover::before{border-color:var(--blue);color:var(--blue)}
+    .file-name{font-size:11px;color:var(--green);font-weight:500}
+
+    /* STATUS CHANGE MODAL */
+    .mo{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:500}
+    .md{background:#fff;border-radius:10px;padding:24px;max-width:500px;width:92%;box-shadow:0 10px 40px rgba(0,0,0,.2)}
+    .md h3{margin-bottom:12px;font-size:16px}
+    .md label{display:block;font-size:13px;font-weight:600;margin-bottom:3px;margin-top:10px}
+    .md select,.md input[type="text"],.md textarea{width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit}
+    .md textarea{min-height:60px;resize:vertical}
+    .md .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+    .md .acts button{padding:7px 18px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:500}
+    .md .cbtn{background:#fff;border:1px solid var(--border);color:var(--text)}.md .sbtn{background:var(--blue);color:#fff;border:none}
+    .md .acb{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+    .md .acb label{display:inline-flex;align-items:center;gap:3px;font-weight:400;padding:3px 8px;border:1px solid var(--border);border-radius:12px;cursor:pointer;font-size:12px;margin:0}
+    .md .acb input[type="checkbox"]{width:auto;margin:0}
+    .md p.sub{font-size:13px;color:var(--tl);margin-bottom:8px}
+
+    /* DOCS */
+    .docs-page{padding:24px;max-width:1000px}
+    .docs-page h2{font-size:17px;margin-bottom:14px}
+    .dsec{margin-bottom:20px}.dsec h3{font-size:14px;margin-bottom:8px;color:var(--tl)}
+    .dl{list-style:none}
+    .dl li{padding:7px 12px;border:1px solid var(--border);border-radius:6px;margin-bottom:3px;background:#fff;display:flex;align-items:center;gap:8px}
+    .dl .dn{flex:1;font-size:13px}
+    .dl a{font-size:12px;color:var(--blue);text-decoration:none;padding:2px 8px;border:1px solid var(--blue);border-radius:4px}
+    .dl a:hover{background:var(--blue);color:#fff}
+
+    .hidden{display:none!important}
+    .loading{text-align:center;padding:40px;color:var(--tl)}
+    @media(max-width:900px){.pbar-cell{display:none}}
+    @media(max-width:600px){.header,.dash,.tasks-page,.docs-page,.filters,.toolbar{padding-left:14px;padding-right:14px}.people-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-screen" id="login-screen">
+  <div class="login-card">
+    <h1>Richardson Lake Washington Project</h1>
+    <div class="addr">8560 Sand Point Way NE, Seattle</div>
+    <div class="permit">Permit #7088950-CN &mdash; Permit Feedback Tracker</div>
+    <h2>Who are you?</h2>
+    <div class="people-grid" id="login-people"></div>
+    <span class="guest-link" onclick="loginAs('Guest')">Continue as guest (view only)</span>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden">
+  <div class="header">
+    <div><h1>Richardson Lake Washington Project</h1><div class="sub">8560 Sand Point Way NE &mdash; Permit Feedback Tracker</div></div>
+    <div class="user-pill"><span class="uname" id="hdr-user"></span><button onclick="switchUser()">switch</button></div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" data-tab="dashboard" onclick="showTab('dashboard')">Dashboard</div>
+    <div class="tab" data-tab="mytasks" onclick="showTab('mytasks')">My Owned Tasks</div>
+    <div class="tab" data-tab="mycollab" onclick="showTab('mycollab')">My Collaborated Tasks</div>
+    <div class="tab" data-tab="all" onclick="showTab('all')">All Tasks</div>
+    <div class="tab" data-tab="documents" onclick="showTab('documents')">Documents</div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="page active" id="page-dashboard">
+    <div class="dash">
+      <div class="stats-row" id="stats-row"></div>
+      <h2>Open Items by Owner</h2>
+      <table class="ptable"><thead><tr><th>Owner</th><th>Open</th><th>New</th><th>In Progress</th><th>Completed</th><th class="pbar-cell">Progress</th></tr></thead><tbody id="ptbody"></tbody></table>
+    </div>
+  </div>
+
+  <!-- MY OWNED TASKS -->
+  <div class="page" id="page-mytasks">
+    <div class="toolbar">
+      <button class="btn" onclick="openNewTaskModal()">+ New Task</button>
+      <span class="spacer"></span>
+    </div>
+    <div class="filters" id="my-filters">
+      <button class="fc active" data-f="all" onclick="fMyStatus('all')">All</button>
+      <button class="fc active" data-f="pending" onclick="fMyStatus('pending')">New</button>
+      <button class="fc active" data-f="in_progress" onclick="fMyStatus('in_progress')">In Progress</button>
+      <button class="fc active" data-f="completed" onclick="fMyStatus('completed')">Completed</button>
+      <button class="fc active" data-f="blocked" onclick="fMyStatus('blocked')">Blocked</button>
+    </div>
+    <div class="tasks-page" id="my-tasks-area"></div>
+  </div>
+
+  <!-- MY COLLABORATED TASKS -->
+  <div class="page" id="page-mycollab">
+    <div class="toolbar">
+      <button class="btn" onclick="openNewTaskModal()">+ New Task</button>
+      <span class="spacer"></span>
+    </div>
+    <div class="filters" id="collab-filters">
+      <button class="fc active" data-f="all" onclick="fCollabStatus('all')">All</button>
+      <button class="fc active" data-f="pending" onclick="fCollabStatus('pending')">New</button>
+      <button class="fc active" data-f="in_progress" onclick="fCollabStatus('in_progress')">In Progress</button>
+      <button class="fc active" data-f="completed" onclick="fCollabStatus('completed')">Completed</button>
+      <button class="fc active" data-f="blocked" onclick="fCollabStatus('blocked')">Blocked</button>
+    </div>
+    <div class="tasks-page" id="collab-tasks-area"></div>
+  </div>
+
+  <!-- ALL TASKS -->
+  <div class="page" id="page-all">
+    <div class="toolbar">
+      <button class="btn" onclick="openNewTaskModal()">+ New Task</button>
+      <span class="spacer"></span>
+      <span class="flabel" id="all-filter-label"></span>
+    </div>
+    <div class="filters" id="all-filters">
+      <button class="fc active" data-f="all" onclick="fAllStatus('all')">All</button>
+      <button class="fc active" data-f="pending" onclick="fAllStatus('pending')">New</button>
+      <button class="fc active" data-f="in_progress" onclick="fAllStatus('in_progress')">In Progress</button>
+      <button class="fc active" data-f="completed" onclick="fAllStatus('completed')">Completed</button>
+      <button class="fc active" data-f="blocked" onclick="fAllStatus('blocked')">Blocked</button>
+    </div>
+    <div class="tasks-page" id="all-tasks-area"></div>
+  </div>
+
+  <!-- DOCUMENTS -->
+  <div class="page" id="page-documents">
+    <div class="docs-page">
+      <h2>Project Documents</h2>
+      <div class="dsec"><h3>City Correction Letters (Mar 2026)</h3><ul class="dl" id="corr-list"></ul></div>
+      <div class="dsec"><h3>Submitted Permit Plans (Feb 2026)</h3><ul class="dl" id="plan-list"></ul></div>
+      <div class="dsec"><h3>Documents from Comments</h3><ul class="dl" id="comment-docs-list"></ul></div>
+    </div>
+  </div>
+</div>
+
+<!-- STATUS CHANGE MODAL -->
+<div class="mo hidden" id="status-modal" onclick="if(event.target===this)closeStatusModal()">
+  <div class="md">
+    <h3>Change Status</h3>
+    <p class="sub">Please add a comment explaining the status change.</p>
+    <input type="hidden" id="sm-task-id">
+    <input type="hidden" id="sm-new-status">
+    <label>New Status</label>
+    <input type="text" id="sm-status-display" disabled style="background:#f8f9fa">
+    <label>Comment (required)</label>
+    <textarea id="sm-comment" placeholder="Why is the status changing?"></textarea>
+    <div class="acts">
+      <button class="cbtn" onclick="closeStatusModal()">Cancel</button>
+      <button class="sbtn" onclick="submitStatusChange()">Update Status</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHANGE OWNER MODAL -->
+<div class="mo hidden" id="co-modal" onclick="if(event.target===this)closeCO()">
+  <div class="md">
+    <h3>Change Owner</h3>
+    <p class="sub">Select the new owner and explain why.</p>
+    <input type="hidden" id="co-task-id">
+    <label>Current Owner</label>
+    <input type="text" id="co-current" disabled style="background:#f8f9fa">
+    <label>New Owner</label>
+    <select id="co-new-owner"></select>
+    <label>Reason (required)</label>
+    <textarea id="co-reason" placeholder="Why should this task be re-assigned?"></textarea>
+    <div class="acts">
+      <button class="cbtn" onclick="closeCO()">Cancel</button>
+      <button class="sbtn" onclick="submitCO()">Change Owner</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW TASK MODAL -->
+<div class="mo hidden" id="new-task-modal" onclick="if(event.target===this)closeNT()">
+  <div class="md">
+    <h3>Create New Task</h3>
+    <label>Category</label><select id="nt-cat"></select>
+    <label>Description</label><textarea id="nt-desc" placeholder="What needs to be done..."></textarea>
+    <label>Owner</label><select id="nt-owner" onchange="if(this.value==='__new__'){this.value=PEOPLE[0].name;pendingNewPersonContext=null;openAddPersonModal()}"></select>
+    <label>Collaborators</label><div class="acb" id="nt-involved"></div>
+    <label>Notes</label><input type="text" id="nt-notes" placeholder="Additional context...">
+    <div class="acts">
+      <button class="cbtn" onclick="closeNT()">Cancel</button>
+      <button class="sbtn" onclick="submitNT()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD PERSON MODAL -->
+<div class="mo hidden" id="ap-modal" onclick="if(event.target===this)closeAP()">
+  <div class="md">
+    <h3>Add New Person</h3>
+    <label>Name</label><input type="text" id="ap-name" placeholder="Full name">
+    <label>Role / Company</label><input type="text" id="ap-role" placeholder="e.g. Structural Engineer, Landscape Architect">
+    <label>Email</label><input type="text" id="ap-email" placeholder="email@example.com">
+    <label>Phone</label><input type="text" id="ap-phone" placeholder="206-555-1234">
+    <div class="acts">
+      <button class="cbtn" onclick="closeAP()">Cancel</button>
+      <button class="sbtn" onclick="submitAP()">Add Person</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const PEOPLE=[
+  {name:'Karen',role:'Architect'},{name:'Ryan',role:'Structural Engineer (BTL)'},
+  {name:'Reid',role:'Builder'},{name:'William',role:'Permit Specialist'},
+  {name:'James Strange',role:'Geotechnical Engineer'},{name:'Rachel',role:'Civil Engineer'},
+  {name:'Derek',role:'Owner'},{name:'Sage & Stone',role:'Landscape'}
+];
+const PEOPLE_NAMES=PEOPLE.map(p=>p.name);
+
+const CATEGORY_REVIEWERS={
+  'Ordinance':'David Aguilera',
+  'Structural':'David Aguilera',
+  'Energy':'Cary Novotney',
+  'Zoning':'Mike Peli',
+  'Land Use / Shoreline':'David Landry',
+  'ECA / Geotech':'Jackie Bronner',
+  'Revegetation':'Leah Carlson',
+  'Drainage':'Viktor Peykov',
+  'SCL (City Light)':'Max Horne',
+  'Fire':'QSteffy'
+};
+
+let myTasks=[],allViewTasks=[];
+let user=localStorage.getItem('currentUser')||'';
+const ALL_STATUSES=['pending','in_progress','completed','blocked'];
+let myStatuses=new Set(ALL_STATUSES),collabStatuses=new Set(ALL_STATUSES),allStatuses=new Set(ALL_STATUSES);
+let ownerFilter='';
+let collapsed=new Set(),statsCache=null;
+
+// ===== LOGIN =====
+async function initLogin(){
+  const stats=await fetch('/api/stats').then(r=>r.json());
+  document.getElementById('login-people').innerHTML=PEOPLE.map(p=>{
+    const d=stats.byPerson[p.name];
+    const open=d?d.open:0;
+    return `<button class="person-btn" onclick="loginAs('${p.name}')">
+      ${p.name}<span class="role">${p.role}</span>
+      <span class="badge ${open===0?'done':''}">${open===0?'All done':open+' open'}</span>
+    </button>`;
+  }).join('');
+}
+function loginAs(name){
+  user=name;localStorage.setItem('currentUser',name);
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('hdr-user').textContent=name;
+  showTab('dashboard');
+  loadAll();
+}
+function switchUser(){
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('login-screen').classList.remove('hidden');
+  initLogin();
+}
+
+// ===== TABS =====
+function showTab(t){
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelector(`.tab[data-tab="${t}"]`).classList.add('active');
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+  document.getElementById('page-'+t).classList.add('active');
+  if(t==='dashboard')loadDashboard();
+  if(t==='mytasks')loadMyTasks();
+  if(t==='mycollab')loadCollabTasks();
+  if(t==='all')loadAllTasks();
+  if(t==='documents')loadDocs();
+}
+
+// ===== LOAD DATA =====
+async function loadAll(){
+  await Promise.all([loadDashboard(),loadMyTasks(),loadCollabTasks()]);
+}
+async function loadMyTasks(){
+  if(!user||user==='Guest'){myTasks=[];renderMyTasks();return}
+  myTasks=await fetch('/api/tasks-full?owner='+encodeURIComponent(user)).then(r=>r.json());
+  renderMyTasks();
+}
+let collabTasks=[];
+async function loadCollabTasks(){
+  if(!user||user==='Guest'){collabTasks=[];renderCollabTasks();return}
+  // Get all tasks where user is informed (collaborator) but NOT owner
+  const all=await fetch('/api/tasks-full?informed_for='+encodeURIComponent(user)).then(r=>r.json());
+  collabTasks=all.filter(t=>t.owner!==user);
+  renderCollabTasks();
+}
+async function loadAllTasks(){
+  const p=new URLSearchParams();
+  if(ownerFilter)p.set('owner',ownerFilter);
+  allViewTasks=await fetch('/api/tasks-full?'+p).then(r=>r.json());
+  renderAllTasks();
+}
+async function loadDashboard(){
+  statsCache=await fetch('/api/stats').then(r=>r.json());
+  renderDash();
+}
+async function loadDocs(){
+  const[c,p,a]=await Promise.all([
+    fetch('/api/documents/corrections').then(r=>r.json()),
+    fetch('/api/documents/submitted-plans').then(r=>r.json()),
+    fetch('/api/documents/comment-attachments').then(r=>r.json())
+  ]);
+  document.getElementById('corr-list').innerHTML=c.map(d=>`<li><span>&#128196;</span><span class="dn">${esc(d.name)}</span><a href="${d.url}" target="_blank">View</a><a href="${d.url}" download>Download</a></li>`).join('');
+  document.getElementById('plan-list').innerHTML=p.map(d=>`<li><span>&#128206;</span><span class="dn">${esc(d.name)}</span><a href="${d.url}" target="_blank">View</a><a href="${d.url}" download>Download</a></li>`).join('');
+  document.getElementById('comment-docs-list').innerHTML=a.length===0
+    ?'<li style="color:var(--tl);font-size:13px">No documents uploaded yet.</li>'
+    :a.map(d=>`<li><span>&#128206;</span><span class="dn">${esc(d.original_name)}<span style="color:var(--tl);font-size:11px;margin-left:8px">by ${esc(d.uploaded_by)} &middot; ${esc(d.category)}</span></span><a href="#" onclick="viewSingleTask(${d.task_id});return false">View Task</a><a href="/uploads/${encodeURIComponent(d.filename)}" target="_blank">View</a><a href="/uploads/${encodeURIComponent(d.filename)}" download="${esc(d.original_name)}">Download</a></li>`).join('');
+}
+
+// ===== RENDER DASHBOARD =====
+function renderDash(){
+  if(!statsCache)return;
+  const s=statsCache;
+  document.getElementById('stats-row').innerHTML=`
+    <div class="sc"><div class="n">${s.total}</div><div class="l">Total</div></div>
+    <div class="sc s-p"><div class="n">${s.pending}</div><div class="l">New</div></div>
+    <div class="sc s-i"><div class="n">${s.inProgress}</div><div class="l">In Progress</div></div>
+    <div class="sc s-c"><div class="n">${s.completed}</div><div class="l">Completed</div></div>
+    <div class="sc s-b"><div class="n">${s.blocked}</div><div class="l">Blocked</div></div>`;
+  const rows=Object.entries(s.byPerson).filter(([,d])=>d.owned>0).sort((a,b)=>b[1].open-a[1].open);
+  document.getElementById('ptbody').innerHTML=rows.map(([name,d])=>{
+    const pct=d.owned>0?Math.round(d.completed/d.owned*100):0;
+    return `<tr>
+      <td><span class="pn" onclick="filterOwner('${name}')">${esc(name)}</span></td>
+      <td><span class="open-n ${d.open===0?'zero':'has'}">${d.open}</span></td>
+      <td>${d.pending||0}</td><td>${d.in_progress||0}</td><td>${d.completed||0}</td>
+      <td class="pbar-cell"><div class="pbar"><div class="fill" style="width:${pct}%"></div></div><span style="font-size:11px;color:var(--tl)">${pct}%</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ===== RENDER MY OWNED TASKS =====
+function renderMyTasks(){
+  const area=document.getElementById('my-tasks-area');
+  const filtered=myStatuses.size===ALL_STATUSES.length?myTasks:myTasks.filter(t=>myStatuses.has(t.status));
+  if(!filtered.length){area.innerHTML='<div class="loading">No owned tasks match your filters.</div>';return}
+  area.innerHTML=`<div class="section-title">${filtered.length} task${filtered.length!==1?'s':''}</div>`+renderGrouped(filtered);
+}
+
+// ===== RENDER COLLABORATED TASKS =====
+function renderCollabTasks(){
+  const area=document.getElementById('collab-tasks-area');
+  const filtered=collabStatuses.size===ALL_STATUSES.length?collabTasks:collabTasks.filter(t=>collabStatuses.has(t.status));
+  if(!filtered.length){area.innerHTML='<div class="loading">No collaborated tasks match your filters.</div>';return}
+  area.innerHTML=`<div class="section-title">${filtered.length} task${filtered.length!==1?'s':''}</div>`+renderGrouped(filtered);
+}
+
+// ===== RENDER ALL TASKS =====
+function renderAllTasks(){
+  const area=document.getElementById('all-tasks-area');
+  const filtered=allStatuses.size===ALL_STATUSES.length?allViewTasks:allViewTasks.filter(t=>allStatuses.has(t.status));
+  if(!filtered.length){area.innerHTML='<div class="loading">No tasks match.</div>';return}
+  area.innerHTML=renderGrouped(filtered);
+}
+
+// ===== RENDER GROUPED BY CATEGORY =====
+function renderGrouped(tasks){
+  const groups={};
+  tasks.forEach(t=>{if(!groups[t.category])groups[t.category]=[];groups[t.category].push(t)});
+  return Object.entries(groups).map(([cat,ts])=>{
+    const done=ts.filter(t=>t.status==='completed').length;
+    const col=collapsed.has(cat);
+    const pdfLink=`<a class="cat-pdf" href="/viewer.html?category=${encodeURIComponent(cat)}" target="_blank" onclick="event.stopPropagation()">View Corrections Document</a>`;
+    return `<div class="cat-section">
+      <div class="cat-hdr" onclick="toggleCat('${cat}')">
+        <span class="tog">${col?'&#9654;':'&#9660;'}</span>
+        <h2>${esc(cat)}</h2>${pdfLink}
+        <div class="cat-prog">${done}/${ts.length} completed</div>
+      </div>
+      <div class="${col?'hidden':''}">${ts.map(t=>renderCard(t)).join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+// ===== RENDER SINGLE TASK CARD =====
+function renderCard(t){
+  const oCls='o-'+t.owner.replace(/[^a-zA-Z]/g,'');
+  const mine=t.owner===user;
+  const involved=(t.informed||'').split(',').map(s=>s.trim()).filter(Boolean);
+  const involvedHtml=involved.length
+    ?`<span style="font-size:10px;color:var(--tl);font-weight:600;text-transform:uppercase;letter-spacing:.3px">Collaborators:</span> ${involved.map(n=>`<span class="involved-tag" onclick="filterOwner('${n}')">${esc(n)}</span>`).join(' ')}`
+    :'';
+  const corrLink=t.correction_index?`<a class="corr-link" href="/viewer.html?category=${encodeURIComponent(t.category)}&highlight=${t.correction_index}" target="_blank" onclick="event.stopPropagation()">View Corrections Document</a>`:'';
+
+  // Reviewer name from category
+  const reviewerName=CATEGORY_REVIEWERS[t.category]||'City of Seattle';
+
+  // Check for @mentions directed at current user
+  const mentionedInComments=(t.comments||[]).some(c=>c.body.includes('@'+user));
+  const mentionAlert=mentionedInComments?`<div class="mention-alert">You were @mentioned in this task</div>`:'';
+
+  // Build timeline (merge comments + history, sorted by time)
+  const timeline=buildTimeline(t);
+
+  // Status display
+  const statusText=sLabel(t.status);
+  const statusColors={pending:'var(--orange)',in_progress:'var(--blue)',completed:'var(--green)',blocked:'var(--red)'};
+
+  // Build owner select options
+  const ownerOpts=PEOPLE.map(p=>`<option value="${p.name}" ${p.name===t.owner?'selected':''}>${p.name}</option>`).join('')+'<option value="__new__">+ Add new person...</option>';
+  const statusOpts=['pending','in_progress','completed','blocked'].map(s=>`<option value="${s}" ${s===t.status?'selected':''}>${sLabel(s)}</option>`).join('');
+
+  return `<div class="tc s-${t.status} ${mine?'mine':''}" id="task-${t.id}">
+    <div class="tc-meta">
+      <span class="meta-label">Owner:</span>
+      <select class="owner-select ${oCls}" onchange="quickChangeOwner(${t.id},this.value,'${esc(t.owner)}')">${ownerOpts}</select>
+      <select class="status-pill s-${t.status}" onchange="quickChangeStatus(${t.id},this.value,'${t.status}')">${statusOpts}</select>
+      ${involvedHtml}
+      ${corrLink}
+    </div>
+    <div class="tc-comment"><span class="lbl">Reviewer's Comment (${esc(reviewerName)})</span> ${esc(t.city_comment)}</div>
+    ${mentionAlert}
+    <div class="timeline">${timeline}</div>
+    <div class="comment-box">
+      <textarea id="cb-${t.id}" placeholder="Add a comment..." rows="1"></textarea>
+      <div class="actions">
+        <label class="file-pick"><input type="file" id="fi-${t.id}" onchange="onFilePick(${t.id})"><span id="fn-${t.id}" class="file-name"></span></label>
+        <button onclick="postComment(${t.id})">Post</button>
+        <button onclick="cancelComment(${t.id})" class="cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ===== BUILD TIMELINE =====
+function buildTimeline(t){
+  const items=[];
+  // History events
+  (t.history||[]).forEach(h=>{
+    let icon='status-icon',label='';
+    if(h.action==='status_change'){icon='status-icon';label='changed status: '+h.detail}
+    else if(h.action==='owner_change'){icon='owner-icon';label='changed owner: '+h.detail}
+    else if(h.action==='created'){icon='create-icon';label='created this task'}
+    else if(h.action==='attachment'){return} // skip — shown from attachments table
+    else if(h.action==='comment'){return} // skip — shown from comments table
+    else{label=h.detail}
+    items.push({time:h.created_at,html:`
+      <div class="tl-item"><div class="tl-icon ${icon}">&#8226;</div><div class="tl-body">
+        <div class="tl-header"><span class="tl-author">${esc(h.actor)}</span><span class="tl-action">${label}</span><span class="tl-time">${fmtTime(h.created_at)}</span><button class="del-comment" onclick="deleteHistory(${h.id})" title="Delete">&times;</button></div>
+      </div></div>`});
+  });
+  // Comments
+  (t.comments||[]).forEach(c=>{
+    const bodyHtml=formatMentions(esc(c.body));
+    items.push({time:c.created_at,html:`
+      <div class="tl-item"><div class="tl-icon comment-icon">&#9993;</div><div class="tl-body">
+        <div class="tl-header"><span class="tl-author">${esc(c.author)}</span><span class="tl-action">commented</span><span class="tl-time">${fmtTime(c.created_at)}</span><button class="del-comment" onclick="deleteComment(${c.id})" title="Delete comment">&times;</button></div>
+        <div class="tl-text">${bodyHtml}</div>
+      </div></div>`});
+  });
+  // Attachments
+  (t.attachments||[]).forEach(a=>{
+    items.push({time:a.created_at,html:`
+      <div class="tl-item"><div class="tl-icon file-icon">&#128206;</div><div class="tl-body">
+        <div class="tl-header"><span class="tl-author">${esc(a.uploaded_by)}</span><span class="tl-action">attached</span><a href="/uploads/${encodeURIComponent(a.filename)}" download="${esc(a.original_name)}" style="color:var(--blue);text-decoration:none;font-size:12px">${esc(a.original_name)}</a><span class="tl-time">${fmtTime(a.created_at)}</span><button class="del-comment" onclick="deleteAttachment(${a.id})" title="Delete attachment">&times;</button></div>
+      </div></div>`});
+  });
+
+  items.sort((a,b)=>a.time.localeCompare(b.time));
+  if(!items.length) return '<div style="font-size:12px;color:var(--tl);padding:4px 0">No activity yet.</div>';
+  return items.map(i=>i.html).join('');
+}
+
+function formatMentions(html){
+  return html.replace(/@(\w[\w\s&]*\w|\w+)/g,(match,name)=>{
+    if(PEOPLE_NAMES.some(p=>name===p||p.startsWith(name)))
+      return `<span class="tl-mention">${match}</span>`;
+    return match;
+  });
+}
+
+// ===== STATUS CHANGE (requires comment) =====
+// Called from the inline status dropdown
+function quickChangeStatus(taskId,newStatus,oldStatus){
+  if(newStatus===oldStatus)return;
+  if(!reqUser()){
+    // revert the select
+    const sel=document.querySelector(`#task-${taskId} .status-pill`);
+    if(sel)sel.value=oldStatus;
+    return;
+  }
+  // Pre-fill the modal with the chosen status
+  document.getElementById('sm-task-id').value=taskId;
+  // Replace the status display with a fixed label
+  const container=document.getElementById('sm-status-display').parentNode;
+  const old=document.getElementById('sm-status-display')||document.getElementById('sm-new-status');
+  const inp=document.createElement('input');
+  inp.type='text';inp.id='sm-status-display';inp.disabled=true;
+  inp.style.cssText='background:#f8f9fa;width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px';
+  inp.value=sLabel(newStatus);
+  old.parentNode.replaceChild(inp,old);
+  // Store the actual value in a hidden field
+  document.getElementById('sm-task-id').dataset.newStatus=newStatus;
+  document.getElementById('sm-task-id').dataset.oldStatus=oldStatus;
+  document.getElementById('sm-comment').value='';
+  document.getElementById('status-modal').classList.remove('hidden');
+}
+
+function closeStatusModal(){
+  document.getElementById('status-modal').classList.add('hidden');
+  // Revert the inline select if user cancelled
+  const taskId=document.getElementById('sm-task-id').value;
+  const oldStatus=document.getElementById('sm-task-id').dataset.oldStatus;
+  if(taskId&&oldStatus){
+    const sel=document.querySelector(`#task-${taskId} .status-pill`);
+    if(sel)sel.value=oldStatus;
+  }
+}
+function closeStatusModal(){document.getElementById('status-modal').classList.add('hidden')}
+async function submitStatusChange(){
+  const el=document.getElementById('sm-task-id');
+  const taskId=el.value;
+  const newStatus=el.dataset.newStatus;
+  const comment=document.getElementById('sm-comment').value.trim();
+  if(!comment){alert('Please add a comment explaining the status change.');return}
+  await fetch(`/api/tasks/${taskId}/comments`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({author:user,body:`Status → ${sLabel(newStatus)}: ${comment}`})});
+  await fetch(`/api/tasks/${taskId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:newStatus,actor:user})});
+  document.getElementById('status-modal').classList.add('hidden');
+  await refreshCurrent();
+}
+
+// ===== CHANGE OWNER =====
+// Called from the inline owner dropdown
+function quickChangeOwner(taskId,newOwner,oldOwner){
+  if(newOwner===oldOwner)return;
+  if(newOwner==='__new__'){
+    // Revert select, open add person modal
+    const sel=document.querySelector(`#task-${taskId} .owner-select`);
+    if(sel)sel.value=oldOwner;
+    pendingNewPersonContext={taskId,oldOwner,target:'owner'};
+    openAddPersonModal();
+    return;
+  }
+  if(!reqUser()){
+    const sel=document.querySelector(`#task-${taskId} .owner-select`);
+    if(sel)sel.value=oldOwner;
+    return;
+  }
+  document.getElementById('co-task-id').value=taskId;
+  document.getElementById('co-task-id').dataset.oldOwner=oldOwner;
+  document.getElementById('co-current').value=oldOwner;
+  document.getElementById('co-new-owner').innerHTML=`<option value="${newOwner}" selected>${newOwner}</option>`;
+  document.getElementById('co-reason').value='';
+  document.getElementById('co-modal').classList.remove('hidden');
+}
+function closeCO(){
+  document.getElementById('co-modal').classList.add('hidden');
+  // Revert inline select
+  const taskId=document.getElementById('co-task-id').value;
+  const oldOwner=document.getElementById('co-task-id').dataset.oldOwner;
+  if(taskId&&oldOwner){
+    const sel=document.querySelector(`#task-${taskId} .owner-select`);
+    if(sel)sel.value=oldOwner;
+  }
+}
+async function submitCO(){
+  const taskId=document.getElementById('co-task-id').value;
+  const newOwner=document.getElementById('co-new-owner').value;
+  const reason=document.getElementById('co-reason').value.trim();
+  if(!reason){alert('Please explain why.');return}
+  const oldOwner=document.getElementById('co-current').value;
+  await fetch(`/api/tasks/${taskId}/comments`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({author:user,body:`Changed owner from ${oldOwner} to ${newOwner}. Reason: ${reason}`})});
+  const task=await fetch('/api/tasks/'+taskId).then(r=>r.json());
+  const inf=(task.informed||'').split(',').map(s=>s.trim()).filter(Boolean);
+  if(!inf.includes(oldOwner))inf.push(oldOwner);
+  await fetch(`/api/tasks/${taskId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({owner:newOwner,informed:inf.filter(n=>n!==newOwner).join(', '),actor:user})});
+  closeCO();
+  await refreshCurrent();
+}
+
+// ===== ADD PERSON =====
+let pendingNewPersonContext=null;
+function openAddPersonModal(){
+  document.getElementById('ap-name').value='';
+  document.getElementById('ap-role').value='';
+  document.getElementById('ap-email').value='';
+  document.getElementById('ap-phone').value='';
+  document.getElementById('ap-modal').classList.remove('hidden');
+}
+function closeAP(){
+  document.getElementById('ap-modal').classList.add('hidden');
+  pendingNewPersonContext=null;
+}
+function submitAP(){
+  const name=document.getElementById('ap-name').value.trim();
+  const role=document.getElementById('ap-role').value.trim();
+  const email=document.getElementById('ap-email').value.trim();
+  const phone=document.getElementById('ap-phone').value.trim();
+  if(!name){alert('Please enter a name.');return}
+  if(!role){alert('Please enter a role.');return}
+  // Add to PEOPLE list
+  PEOPLE.push({name,role,email,phone});
+  PEOPLE_NAMES.push(name);
+  document.getElementById('ap-modal').classList.add('hidden');
+  // If triggered from an owner dropdown, proceed with the change owner flow
+  if(pendingNewPersonContext){
+    const ctx=pendingNewPersonContext;
+    pendingNewPersonContext=null;
+    quickChangeOwner(ctx.taskId,name,ctx.oldOwner);
+  }else{
+    // Just refresh to pick up the new person in dropdowns
+    refreshCurrent();
+  }
+}
+
+// ===== DELETE COMMENT =====
+async function deleteComment(commentId){
+  if(!reqUser())return;
+  await fetch('/api/comments/'+commentId,{method:'DELETE'});
+  await refreshCurrent();
+}
+async function deleteAttachment(attachmentId){
+  if(!reqUser())return;
+  await fetch('/api/attachments/'+attachmentId,{method:'DELETE'});
+  await refreshCurrent();
+}
+async function deleteHistory(historyId){
+  if(!reqUser())return;
+  await fetch('/api/activity/'+historyId,{method:'DELETE'});
+  await refreshCurrent();
+}
+
+// ===== COMMENT & FILE UPLOAD =====
+// Track staged files per task
+const stagedFiles={};
+
+function onFilePick(taskId){
+  const inp=document.getElementById('fi-'+taskId);
+  const label=document.getElementById('fn-'+taskId);
+  if(inp.files.length){
+    stagedFiles[taskId]=inp.files[0];
+    label.textContent=inp.files[0].name;
+  }else{
+    delete stagedFiles[taskId];
+    label.textContent='';
+  }
+}
+
+async function postComment(taskId){
+  if(!reqUser())return;
+  const ta=document.getElementById('cb-'+taskId);
+  if(!ta)return;
+  const commentText=ta.value.trim();
+  const hasFile=!!stagedFiles[taskId];
+  if(!commentText&&!hasFile)return;
+  // Post comment if there's text
+  if(commentText){
+    await fetch(`/api/tasks/${taskId}/comments`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({author:user,body:commentText})});
+    // Auto-add @mentioned people as collaborators
+    const mentioned=[];
+    for(const p of PEOPLE){
+      if(commentText.includes('@'+p.name))mentioned.push(p.name);
+    }
+    if(mentioned.length){
+      const task=await fetch('/api/tasks/'+taskId).then(r=>r.json());
+      const current=(task.informed||'').split(',').map(s=>s.trim()).filter(Boolean);
+      let changed=false;
+      for(const m of mentioned){
+        if(m!==task.owner&&!current.includes(m)){current.push(m);changed=true}
+      }
+      if(changed){
+        await fetch(`/api/tasks/${taskId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({informed:current.join(', '),actor:user})});
+      }
+    }
+  }
+  // Upload file if staged
+  if(hasFile){
+    const fd=new FormData();fd.append('file',stagedFiles[taskId]);fd.append('uploaded_by',user);
+    await fetch(`/api/tasks/${taskId}/attachments`,{method:'POST',body:fd});
+    delete stagedFiles[taskId];
+  }
+  ta.value='';
+  await refreshCurrent();
+}
+
+function cancelComment(taskId){
+  const ta=document.getElementById('cb-'+taskId);
+  ta.value='';
+  const inp=document.getElementById('fi-'+taskId);
+  inp.value='';
+  delete stagedFiles[taskId];
+  const label=document.getElementById('fn-'+taskId);
+  if(label)label.textContent='';
+}
+
+// ===== NEW TASK =====
+function openNewTaskModal(){
+  if(!reqUser())return;
+  const cats=['Ordinance','Structural','Energy','Zoning','Land Use / Shoreline','ECA / Geotech','Revegetation','Drainage','SCL (City Light)','Fire'];
+  document.getElementById('nt-cat').innerHTML=cats.map(c=>`<option>${c}</option>`).join('');
+  document.getElementById('nt-owner').innerHTML=PEOPLE.map(p=>`<option value="${p.name}">${p.name} (${p.role})</option>`).join('')+'<option value="__new__">+ Add new person...</option>';
+  document.getElementById('nt-involved').innerHTML=PEOPLE.map(p=>`<label><input type="checkbox" value="${p.name}"> ${p.name}</label>`).join('');
+  document.getElementById('nt-desc').value='';document.getElementById('nt-notes').value='';
+  document.getElementById('new-task-modal').classList.remove('hidden');
+}
+function closeNT(){document.getElementById('new-task-modal').classList.add('hidden')}
+async function submitNT(){
+  const cat=document.getElementById('nt-cat').value;
+  const desc=document.getElementById('nt-desc').value.trim();
+  const owner=document.getElementById('nt-owner').value;
+  const notes=document.getElementById('nt-notes').value.trim();
+  const involved=Array.from(document.querySelectorAll('#nt-involved input:checked')).map(c=>c.value).filter(v=>v!==owner).join(', ');
+  if(!desc){alert('Enter a description.');return}
+  await fetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({category:cat,city_comment:desc,owner,informed:involved,notes,actor:user})});
+  closeNT();await refreshCurrent();
+}
+
+// ===== FILTERS (multi-select toggle) =====
+function toggleFilter(setObj, status, containerId, renderFn){
+  if(status==='all'){
+    // Toggle all: if all are active, deselect all; otherwise select all
+    if(setObj.size===ALL_STATUSES.length){
+      setObj.clear();
+    }else{
+      ALL_STATUSES.forEach(s=>setObj.add(s));
+    }
+  }else{
+    if(setObj.has(status)) setObj.delete(status);
+    else setObj.add(status);
+  }
+  syncFilterUI(setObj, containerId);
+  renderFn();
+}
+function syncFilterUI(setObj, containerId){
+  const container=document.getElementById(containerId);
+  const allBtn=container.querySelector('[data-f="all"]');
+  container.querySelectorAll('[data-f]').forEach(btn=>{
+    const s=btn.dataset.f;
+    if(s==='all'){
+      btn.classList.toggle('active', setObj.size===ALL_STATUSES.length);
+    }else{
+      btn.classList.toggle('active', setObj.has(s));
+    }
+  });
+}
+function fMyStatus(s){toggleFilter(myStatuses,s,'my-filters',renderMyTasks)}
+function fCollabStatus(s){toggleFilter(collabStatuses,s,'collab-filters',renderCollabTasks)}
+function fAllStatus(s){toggleFilter(allStatuses,s,'all-filters',renderAllTasks)}
+function filterOwner(name){
+  ownerFilter=name;
+  document.getElementById('all-filter-label').textContent=name?`Showing: ${name}'s tasks`:'';
+  showTab('all');loadAllTasks();
+}
+async function viewSingleTask(taskId){
+  const task=await fetch('/api/tasks/'+taskId).then(r=>r.json());
+  if(!task)return;
+  // Switch to All Tasks tab without triggering loadAllTasks
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelector('.tab[data-tab="all"]').classList.add('active');
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+  document.getElementById('page-all').classList.add('active');
+  const area=document.getElementById('all-tasks-area');
+  area.innerHTML='<div style="padding:8px 0"><a href="#" onclick="loadAllTasks();return false" style="color:var(--blue);font-size:13px;text-decoration:none">&larr; Back to All Tasks</a></div>'+renderCard(task);
+}
+async function goToTask(taskId){
+  ownerFilter='';
+  document.getElementById('all-filter-label').textContent='';
+  allStatuses=new Set(ALL_STATUSES);
+  showTab('all');
+  await loadAllTasks();
+  setTimeout(()=>{
+    const el=document.getElementById('task-'+taskId);
+    if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.style.boxShadow='0 0 0 3px rgba(3,102,214,0.4)';setTimeout(()=>el.style.boxShadow='',3000)}
+  },100);
+}
+function toggleCat(c){if(collapsed.has(c))collapsed.delete(c);else collapsed.add(c);renderMyTasks();renderCollabTasks();renderAllTasks();}
+
+// ===== REFRESH =====
+async function refreshCurrent(){
+  await loadAll();
+  const activeTab=document.querySelector('.tab.active')?.dataset.tab;
+  if(activeTab==='all')await loadAllTasks();
+  if(activeTab==='mycollab')await loadCollabTasks();
+}
+
+// ===== HELPERS =====
+function reqUser(){if(!user||user==='Guest'){alert('Select your name first.');return false}return true}
+function sLabel(s){return{pending:'New',in_progress:'In Progress',completed:'Completed',blocked:'Blocked'}[s]||s}
+function esc(s){if(!s)return'';const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function fmtTime(ds){
+  const d=new Date(ds+'Z');
+  const now=new Date();
+  const diff=Math.floor((now-d)/1000);
+  if(diff<60)return'just now';
+  if(diff<3600)return Math.floor(diff/60)+'m ago';
+  if(diff<86400)return Math.floor(diff/3600)+'h ago';
+  if(diff<172800)return'yesterday '+d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+  return d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+}
+
+// ===== INIT =====
+if(user){
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('hdr-user').textContent=user;
+  showTab('dashboard');loadAll();
+}else{initLogin()}
+</script>
+</body>
+</html>
