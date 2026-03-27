@@ -173,6 +173,30 @@
     .dl a{font-size:12px;color:var(--blue);text-decoration:none;padding:2px 8px;border:1px solid var(--blue);border-radius:4px}
     .dl a:hover{background:var(--blue);color:#fff}
 
+    /* FEEDBACK */
+    .fb-page{padding:24px;max-width:1000px}
+    .fb-page h2{font-size:17px;margin-bottom:14px}
+    .fb-card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:10px;border-left:4px solid var(--border)}
+    .fb-card.t-bug{border-left-color:var(--red)}.fb-card.t-feature{border-left-color:var(--purple)}.fb-card.t-comment{border-left-color:var(--blue)}
+    .fb-header{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .fb-type{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:2px 8px;border-radius:10px;color:#fff}
+    .fb-type.t-bug{background:var(--red)}.fb-type.t-feature{background:var(--purple)}.fb-type.t-comment{background:var(--blue)}
+    .fb-title{font-weight:600;font-size:14px;flex:1}
+    .fb-status{font-size:11px;font-weight:600;padding:2px 10px;border-radius:12px;border:1px solid}
+    .fb-status.s-open{color:var(--orange);border-color:var(--orange)}.fb-status.s-in_progress{color:var(--blue);border-color:var(--blue)}
+    .fb-status.s-resolved{color:var(--green);border-color:var(--green)}.fb-status.s-closed{color:var(--tl);border-color:var(--tl)}
+    .fb-body{font-size:13px;margin-top:6px;color:var(--text);line-height:1.5}
+    .fb-meta{font-size:11px;color:var(--tl);margin-top:8px;display:flex;gap:12px;align-items:center}
+    .fb-screenshot{margin-top:8px}
+    .fb-screenshot img{max-width:100%;max-height:300px;border:1px solid var(--border);border-radius:6px;cursor:pointer}
+    .fb-filters{padding:8px 0;display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+    .report-btn{position:fixed;bottom:24px;right:24px;background:var(--blue);color:#fff;border:none;border-radius:28px;padding:12px 20px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.2);z-index:400;display:flex;align-items:center;gap:6px;transition:.15s}
+    .report-btn:hover{background:#0256b9;transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+    .screenshot-preview{margin-top:8px;position:relative;display:inline-block}
+    .screenshot-preview img{max-width:100%;max-height:200px;border:1px solid var(--border);border-radius:6px}
+    .screenshot-preview .remove-ss{position:absolute;top:4px;right:4px;background:var(--red);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+    .fb-empty{text-align:center;padding:40px;color:var(--tl)}
+
     .hidden{display:none!important}
     .loading{text-align:center;padding:40px;color:var(--tl)}
     @media(max-width:900px){.pbar-cell{display:none}}
@@ -205,6 +229,7 @@
     <div class="tab" data-tab="mycollab" onclick="showTab('mycollab')">My Collaborated Tasks</div>
     <div class="tab" data-tab="all" onclick="showTab('all')">All Tasks</div>
     <div class="tab" data-tab="documents" onclick="showTab('documents')">Documents</div>
+    <div class="tab" data-tab="feedback" onclick="showTab('feedback')">Feedback</div>
   </div>
 
   <!-- DASHBOARD -->
@@ -263,6 +288,23 @@
       <button class="fc active" data-f="blocked" onclick="fAllStatus('blocked')">Blocked</button>
     </div>
     <div class="tasks-page" id="all-tasks-area"></div>
+  </div>
+
+  <!-- FEEDBACK -->
+  <div class="page" id="page-feedback">
+    <div class="fb-page">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <h2 style="margin:0">Feedback &amp; Issues</h2>
+        <button class="btn primary" onclick="openFeedbackModal()">+ Report Issue</button>
+      </div>
+      <div class="fb-filters" id="fb-filters">
+        <button class="fc active" data-f="all" onclick="fFbFilter('all')">All</button>
+        <button class="fc active" data-f="bug" onclick="fFbFilter('bug')">Bugs</button>
+        <button class="fc active" data-f="feature" onclick="fFbFilter('feature')">Feature Requests</button>
+        <button class="fc active" data-f="comment" onclick="fFbFilter('comment')">Comments</button>
+      </div>
+      <div id="fb-list"></div>
+    </div>
   </div>
 
   <!-- DOCUMENTS -->
@@ -353,6 +395,45 @@
   </div>
 </div>
 
+<!-- FLOATING REPORT BUTTON -->
+<button class="report-btn" id="report-btn" onclick="openFeedbackModal()">&#9888; Report Issue</button>
+
+<!-- FEEDBACK MODAL -->
+<div class="mo hidden" id="fb-modal" onclick="if(event.target===this)closeFB()">
+  <div class="md" style="max-width:560px">
+    <h3>Report an Issue</h3>
+    <label>Type</label>
+    <select id="fb-type">
+      <option value="bug">Bug Report</option>
+      <option value="feature">Feature Request</option>
+      <option value="comment">General Comment</option>
+    </select>
+    <label>Title</label>
+    <input type="text" id="fb-title" placeholder="Brief summary of the issue...">
+    <label>Description</label>
+    <textarea id="fb-desc" placeholder="What happened? What did you expect? Steps to reproduce..." style="min-height:80px"></textarea>
+    <label>Screenshot</label>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn" onclick="captureScreenshot()" type="button">Capture Screenshot</button>
+      <label class="btn" style="cursor:pointer;margin:0">
+        Or upload image
+        <input type="file" id="fb-file" accept="image/*" style="display:none" onchange="previewUploadedScreenshot()">
+      </label>
+    </div>
+    <div id="fb-ss-preview" class="screenshot-preview hidden"></div>
+    <div class="acts">
+      <button class="cbtn" onclick="closeFB()">Cancel</button>
+      <button class="sbtn" onclick="submitFB()">Submit</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCREENSHOT LIGHTBOX -->
+<div class="mo hidden" id="ss-lightbox" onclick="this.classList.add('hidden')" style="cursor:zoom-out">
+  <img id="ss-lightbox-img" style="max-width:90vw;max-height:90vh;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.4)">
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 const SUPABASE_URL='https://lepwirxfilqaefkxecmf.supabase.co';
@@ -468,6 +549,7 @@ function showTab(t){
   if(t==='mycollab')loadCollabTasks();
   if(t==='all')loadAllTasks();
   if(t==='documents')loadDocs();
+  if(t==='feedback')loadFeedback();
 }
 
 // ===== LOAD DATA =====
@@ -1014,6 +1096,145 @@ function fmtTime(ds){
   if(diff<86400)return Math.floor(diff/3600)+'h ago';
   if(diff<172800)return'yesterday '+d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
   return d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+}
+
+// ===== FEEDBACK =====
+let feedbackItems=[],fbScreenshotBlob=null;
+const FB_TYPES=new Set(['bug','feature','comment']);
+
+function openFeedbackModal(){
+  if(!reqUser())return;
+  document.getElementById('fb-type').value='bug';
+  document.getElementById('fb-title').value='';
+  document.getElementById('fb-desc').value='';
+  document.getElementById('fb-file').value='';
+  fbScreenshotBlob=null;
+  document.getElementById('fb-ss-preview').classList.add('hidden');
+  document.getElementById('fb-ss-preview').innerHTML='';
+  document.getElementById('fb-modal').classList.remove('hidden');
+}
+function closeFB(){document.getElementById('fb-modal').classList.add('hidden');fbScreenshotBlob=null}
+
+async function captureScreenshot(){
+  document.getElementById('fb-modal').classList.add('hidden');
+  try{
+    const canvas=await html2canvas(document.body,{useCORS:true,logging:false,scale:window.devicePixelRatio>1?1.5:1});
+    canvas.toBlob(blob=>{
+      fbScreenshotBlob=blob;
+      showScreenshotPreview(URL.createObjectURL(blob));
+      document.getElementById('fb-modal').classList.remove('hidden');
+    },'image/png');
+  }catch(e){
+    alert('Screenshot capture failed. You can upload an image instead.');
+    document.getElementById('fb-modal').classList.remove('hidden');
+  }
+}
+
+function previewUploadedScreenshot(){
+  const inp=document.getElementById('fb-file');
+  if(!inp.files.length)return;
+  fbScreenshotBlob=inp.files[0];
+  showScreenshotPreview(URL.createObjectURL(inp.files[0]));
+}
+
+function showScreenshotPreview(url){
+  const el=document.getElementById('fb-ss-preview');
+  el.classList.remove('hidden');
+  el.innerHTML=`<img src="${url}" alt="Screenshot"><button class="remove-ss" onclick="removeScreenshot()">&times;</button>`;
+}
+
+function removeScreenshot(){
+  fbScreenshotBlob=null;
+  document.getElementById('fb-file').value='';
+  document.getElementById('fb-ss-preview').classList.add('hidden');
+  document.getElementById('fb-ss-preview').innerHTML='';
+}
+
+async function submitFB(){
+  const type=document.getElementById('fb-type').value;
+  const title=document.getElementById('fb-title').value.trim();
+  const desc=document.getElementById('fb-desc').value.trim();
+  if(!title){alert('Please enter a title.');return}
+  if(!desc){alert('Please enter a description.');return}
+  let screenshotPath=null;
+  if(fbScreenshotBlob){
+    const fname=`${Date.now()}-${user.replace(/[^a-zA-Z0-9]/g,'_')}.png`;
+    const {error:upErr}=await sb.storage.from('screenshots').upload(fname,fbScreenshotBlob,{contentType:fbScreenshotBlob.type||'image/png'});
+    if(!upErr)screenshotPath=fname;
+  }
+  await sb.from('feedback').insert({type,title,description:desc,screenshot_path:screenshotPath,author:user});
+  closeFB();
+  showTab('feedback');
+}
+
+async function loadFeedback(){
+  const {data}=await sb.from('feedback').select('*').order('created_at',{ascending:false});
+  feedbackItems=data||[];
+  renderFeedback();
+}
+
+function renderFeedback(){
+  const filtered=FB_TYPES.size===3?feedbackItems:feedbackItems.filter(f=>FB_TYPES.has(f.type));
+  const el=document.getElementById('fb-list');
+  if(!filtered.length){el.innerHTML='<div class="fb-empty">No feedback yet. Click "Report Issue" to submit one.</div>';return}
+  el.innerHTML=filtered.map(f=>{
+    const typeLabel={bug:'Bug',feature:'Feature Request',comment:'Comment'}[f.type]||f.type;
+    const statusLabel={open:'Open',in_progress:'In Progress',resolved:'Resolved',closed:'Closed'}[f.status]||f.status;
+    let ssHtml='';
+    if(f.screenshot_path){
+      const {data:urlData}=sb.storage.from('screenshots').getPublicUrl(f.screenshot_path);
+      ssHtml=`<div class="fb-screenshot"><img src="${urlData.publicUrl}" alt="Screenshot" onclick="openLightbox('${urlData.publicUrl}')"></div>`;
+    }
+    const statusOpts=['open','in_progress','resolved','closed'].map(s=>`<option value="${s}" ${s===f.status?'selected':''}>${{open:'Open',in_progress:'In Progress',resolved:'Resolved',closed:'Closed'}[s]}</option>`).join('');
+    return `<div class="fb-card t-${f.type}">
+      <div class="fb-header">
+        <span class="fb-type t-${f.type}">${esc(typeLabel)}</span>
+        <span class="fb-title">${esc(f.title)}</span>
+        <select class="status-pill s-${f.status}" style="font-size:11px" onchange="updateFbStatus(${f.id},this.value)">${statusOpts}</select>
+      </div>
+      <div class="fb-body">${esc(f.description).replace(/\n/g,'<br>')}</div>
+      ${ssHtml}
+      <div class="fb-meta">
+        <span>by <strong>${esc(f.author)}</strong></span>
+        <span>${fmtTime(f.created_at)}</span>
+        <button class="del-comment" onclick="deleteFeedback(${f.id})" title="Delete">&times;</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function updateFbStatus(id,status){
+  await sb.from('feedback').update({status,updated_at:new Date().toISOString()}).eq('id',id);
+  await loadFeedback();
+}
+
+async function deleteFeedback(id){
+  if(!confirm('Delete this feedback?'))return;
+  const item=feedbackItems.find(f=>f.id===id);
+  if(item&&item.screenshot_path)await sb.storage.from('screenshots').remove([item.screenshot_path]);
+  await sb.from('feedback').delete().eq('id',id);
+  await loadFeedback();
+}
+
+function fFbFilter(type){
+  if(type==='all'){
+    if(FB_TYPES.size===3)FB_TYPES.clear();
+    else{FB_TYPES.add('bug');FB_TYPES.add('feature');FB_TYPES.add('comment')}
+  }else{
+    if(FB_TYPES.has(type))FB_TYPES.delete(type);else FB_TYPES.add(type);
+  }
+  const container=document.getElementById('fb-filters');
+  container.querySelectorAll('[data-f]').forEach(btn=>{
+    const s=btn.dataset.f;
+    if(s==='all')btn.classList.toggle('active',FB_TYPES.size===3);
+    else btn.classList.toggle('active',FB_TYPES.has(s));
+  });
+  renderFeedback();
+}
+
+function openLightbox(url){
+  document.getElementById('ss-lightbox-img').src=url;
+  document.getElementById('ss-lightbox').classList.remove('hidden');
 }
 
 // ===== INIT =====
