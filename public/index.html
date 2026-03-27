@@ -344,7 +344,12 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
+const SUPABASE_URL='https://lepwirxfilqaefkxecmf.supabase.co';
+const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxlcHdpcnhmaWxxYWVma3hlY21mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1ODE3OTgsImV4cCI6MjA5MDE1Nzc5OH0.wL71JHanoKIu2yOwCXV0hXFlxuYMN0EfjzPMxK0bnR4';
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+
 const PEOPLE=[
   {name:'Karen',role:'Architect'},{name:'Ryan',role:'Structural Engineer (BTL)'},
   {name:'Reid',role:'Builder'},{name:'William',role:'Permit Specialist'},
@@ -373,9 +378,53 @@ let myStatuses=new Set(ALL_STATUSES),collabStatuses=new Set(ALL_STATUSES),allSta
 let ownerFilter='';
 let collapsed=new Set(),statsCache=null;
 
+// ===== SUPABASE HELPERS =====
+async function fetchTasksFull(query){
+  // query is a supabase query builder on tasks — we select tasks + join comments, attachments, activity_log
+  const {data:tasks,error}=await query.order('sort_order').order('id');
+  if(error||!tasks)return[];
+  if(!tasks.length)return[];
+  const ids=tasks.map(t=>t.id);
+  const [cRes,aRes,hRes]=await Promise.all([
+    sb.from('comments').select('*').in('task_id',ids).order('created_at'),
+    sb.from('attachments').select('*').in('task_id',ids).order('created_at'),
+    sb.from('activity_log').select('*').in('task_id',ids).order('created_at')
+  ]);
+  const byTask=(arr)=>{const m={};(arr||[]).forEach(r=>{if(!m[r.task_id])m[r.task_id]=[];m[r.task_id].push(r)});return m};
+  const cm=byTask(cRes.data),am=byTask(aRes.data),hm=byTask(hRes.data);
+  tasks.forEach(t=>{t.comments=cm[t.id]||[];t.attachments=am[t.id]||[];t.history=hm[t.id]||[]});
+  return tasks;
+}
+
+async function fetchStats(){
+  const {data:allTasks}=await sb.from('tasks').select('owner,informed,status');
+  if(!allTasks)return{total:0,completed:0,inProgress:0,pending:0,blocked:0,byPerson:{}};
+  const total=allTasks.length;
+  const completed=allTasks.filter(t=>t.status==='completed').length;
+  const inProgress=allTasks.filter(t=>t.status==='in_progress').length;
+  const pending=allTasks.filter(t=>t.status==='pending').length;
+  const blocked=allTasks.filter(t=>t.status==='blocked').length;
+  const byPerson={};
+  allTasks.forEach(t=>{
+    if(!byPerson[t.owner])byPerson[t.owner]={owned:0,open:0,completed:0,pending:0,in_progress:0,blocked:0};
+    byPerson[t.owner].owned++;
+    if(t.status==='completed')byPerson[t.owner].completed++;
+    else{
+      byPerson[t.owner].open++;
+      if(byPerson[t.owner][t.status]!==undefined)byPerson[t.owner][t.status]++;
+    }
+  });
+  return{total,completed,inProgress,pending,blocked,byPerson};
+}
+
+function storageUrl(filename){
+  const {data}=sb.storage.from('attachments').getPublicUrl(filename);
+  return data.publicUrl;
+}
+
 // ===== LOGIN =====
 async function initLogin(){
-  const stats=await fetch('/api/stats').then(r=>r.json());
+  const stats=await fetchStats();
   document.getElementById('login-people').innerHTML=PEOPLE.map(p=>{
     const d=stats.byPerson[p.name];
     const open=d?d.open:0;
@@ -418,38 +467,70 @@ async function loadAll(){
 }
 async function loadMyTasks(){
   if(!user||user==='Guest'){myTasks=[];renderMyTasks();return}
-  myTasks=await fetch('/api/tasks-full?owner='+encodeURIComponent(user)).then(r=>r.json());
+  myTasks=await fetchTasksFull(sb.from('tasks').select('*').eq('owner',user));
   renderMyTasks();
 }
 let collabTasks=[];
 async function loadCollabTasks(){
   if(!user||user==='Guest'){collabTasks=[];renderCollabTasks();return}
-  // Get all tasks where user is informed (collaborator) but NOT owner
-  const all=await fetch('/api/tasks-full?informed_for='+encodeURIComponent(user)).then(r=>r.json());
+  const all=await fetchTasksFull(sb.from('tasks').select('*').or(`owner.eq.${user},informed.ilike.%${user}%`));
   collabTasks=all.filter(t=>t.owner!==user);
   renderCollabTasks();
 }
 async function loadAllTasks(){
-  const p=new URLSearchParams();
-  if(ownerFilter)p.set('owner',ownerFilter);
-  allViewTasks=await fetch('/api/tasks-full?'+p).then(r=>r.json());
+  let q=sb.from('tasks').select('*');
+  if(ownerFilter)q=q.eq('owner',ownerFilter);
+  allViewTasks=await fetchTasksFull(q);
   renderAllTasks();
 }
 async function loadDashboard(){
-  statsCache=await fetch('/api/stats').then(r=>r.json());
+  statsCache=await fetchStats();
   renderDash();
 }
 async function loadDocs(){
-  const[c,p,a]=await Promise.all([
-    fetch('/api/documents/corrections').then(r=>r.json()),
-    fetch('/api/documents/submitted-plans').then(r=>r.json()),
-    fetch('/api/documents/comment-attachments').then(r=>r.json())
-  ]);
-  document.getElementById('corr-list').innerHTML=c.map(d=>`<li><span>&#128196;</span><span class="dn">${esc(d.name)}</span><a href="${d.url}" target="_blank">View</a><a href="${d.url}" download>Download</a></li>`).join('');
-  document.getElementById('plan-list').innerHTML=p.map(d=>`<li><span>&#128206;</span><span class="dn">${esc(d.name)}</span><a href="${d.url}" target="_blank">View</a><a href="${d.url}" download>Download</a></li>`).join('');
+  // Corrections and submitted plans are static files — build list from known files
+  const corrFiles=[
+    'Corrections - DRAINAGE - Richardson - Cycle 1 (NOTES).pdf',
+    'Corrections - ENERGY - 7088950-CN - Richardson - Cycle 1 (NOTES).pdf',
+    'Corrections - FIRE - Richardson - Cycle 1.pdf',
+    'Corrections - GEO - 7088950-CN - Richardson - Cycle 1 (NOTES).pdf',
+    'Corrections - ORDINANCE - Richardson - Cycle 1 (NOTES).pdf',
+    'Corrections - REVEGETATION - Richardson - Cycle 1 (NOTES).pdf',
+    'Corrections - SCL - 7088950-CN - Richardson - Cycle 1 (NOTES).pdf',
+    'Corrections - SHORELINE - Richardson - Cycle 1 (NOTES).pdf',
+    'Corrections - STRUCTURAL - Richardson - Cycle 1 (NOTES).pdf',
+    'Corrections - ZONING - Richardson - Cycle 1 (NOTES).pdf'
+  ];
+  const planFiles=[
+    'Richardson Residence - Architectural Plans_2026.02.04.pdf',
+    'Richardson Residence - Drainage Report_2026.01.06.pdf',
+    'Richardson Residence - Geotech Pln Rvw Letter_2026.02.04.pdf',
+    'Richardson Residence - Geotech Report_2025.06.27.pdf',
+    'Richardson Residence - PERMIT (S-Sheets) 2026-01-28.pdf',
+    'Richardson Residence - Site Plan_2026.02.04.pdf',
+    'Richardson Residence - Structural Calculations 2021 IBC.pdf',
+    'Richardson Residence - Survey Terrane_2025.06.10.pdf',
+    'Richardson Residence - WSEC 2021 C3_2026.02.04.pdf',
+    'Richardson Residnece - DWD-CSC Plans.pdf',
+    'Richardson Residnece - OSM workbook.pdf'
+  ];
+  document.getElementById('corr-list').innerHTML=corrFiles.map(f=>{
+    const url='/corrections/'+encodeURIComponent(f);
+    return `<li><span>&#128196;</span><span class="dn">${esc(f)}</span><a href="${url}" target="_blank">View</a><a href="${url}" download>Download</a></li>`;
+  }).join('');
+  document.getElementById('plan-list').innerHTML=planFiles.map(f=>{
+    const url='/submitted-plans/'+encodeURIComponent(f);
+    return `<li><span>&#128206;</span><span class="dn">${esc(f)}</span><a href="${url}" target="_blank">View</a><a href="${url}" download>Download</a></li>`;
+  }).join('');
+  // Comment attachments from Supabase
+  const {data:atts}=await sb.from('attachments').select('*,tasks(id,category,city_comment)').order('created_at',{ascending:false});
+  const a=atts||[];
   document.getElementById('comment-docs-list').innerHTML=a.length===0
     ?'<li style="color:var(--tl);font-size:13px">No documents uploaded yet.</li>'
-    :a.map(d=>`<li><span>&#128206;</span><span class="dn">${esc(d.original_name)}<span style="color:var(--tl);font-size:11px;margin-left:8px">by ${esc(d.uploaded_by)} &middot; ${esc(d.category)}</span></span><a href="#" onclick="viewSingleTask(${d.task_id});return false">View Task</a><a href="/uploads/${encodeURIComponent(d.filename)}" target="_blank">View</a><a href="/uploads/${encodeURIComponent(d.filename)}" download="${esc(d.original_name)}">Download</a></li>`).join('');
+    :a.map(d=>{
+      const fileUrl=storageUrl(d.filename);
+      return `<li><span>&#128206;</span><span class="dn">${esc(d.original_name)}<span style="color:var(--tl);font-size:11px;margin-left:8px">by ${esc(d.uploaded_by)} &middot; ${esc(d.tasks?.category||'')}</span></span><a href="#" onclick="viewSingleTask(${d.task_id});return false">View Task</a><a href="${fileUrl}" target="_blank">View</a><a href="${fileUrl}" download="${esc(d.original_name)}">Download</a></li>`;
+    }).join('');
 }
 
 // ===== RENDER DASHBOARD =====
@@ -527,21 +608,11 @@ function renderCard(t){
     :'';
   const corrLink=t.correction_index?`<a class="corr-link" href="/viewer.html?category=${encodeURIComponent(t.category)}&highlight=${t.correction_index}" target="_blank" onclick="event.stopPropagation()">View Corrections Document</a>`:'';
 
-  // Reviewer name from category
   const reviewerName=CATEGORY_REVIEWERS[t.category]||'City of Seattle';
-
-  // Check for @mentions directed at current user
   const mentionedInComments=(t.comments||[]).some(c=>c.body.includes('@'+user));
   const mentionAlert=mentionedInComments?`<div class="mention-alert">You were @mentioned in this task</div>`:'';
-
-  // Build timeline (merge comments + history, sorted by time)
   const timeline=buildTimeline(t);
 
-  // Status display
-  const statusText=sLabel(t.status);
-  const statusColors={pending:'var(--orange)',in_progress:'var(--blue)',completed:'var(--green)',blocked:'var(--red)'};
-
-  // Build owner select options
   const ownerOpts=PEOPLE.map(p=>`<option value="${p.name}" ${p.name===t.owner?'selected':''}>${p.name}</option>`).join('')+'<option value="__new__">+ Add new person...</option>';
   const statusOpts=['pending','in_progress','completed','blocked'].map(s=>`<option value="${s}" ${s===t.status?'selected':''}>${sLabel(s)}</option>`).join('');
 
@@ -570,21 +641,19 @@ function renderCard(t){
 // ===== BUILD TIMELINE =====
 function buildTimeline(t){
   const items=[];
-  // History events
   (t.history||[]).forEach(h=>{
     let icon='status-icon',label='';
     if(h.action==='status_change'){icon='status-icon';label='changed status: '+h.detail}
     else if(h.action==='owner_change'){icon='owner-icon';label='changed owner: '+h.detail}
     else if(h.action==='created'){icon='create-icon';label='created this task'}
-    else if(h.action==='attachment'){return} // skip — shown from attachments table
-    else if(h.action==='comment'){return} // skip — shown from comments table
+    else if(h.action==='attachment'){return}
+    else if(h.action==='comment'){return}
     else{label=h.detail}
     items.push({time:h.created_at,html:`
       <div class="tl-item"><div class="tl-icon ${icon}">&#8226;</div><div class="tl-body">
         <div class="tl-header"><span class="tl-author">${esc(h.actor)}</span><span class="tl-action">${label}</span><span class="tl-time">${fmtTime(h.created_at)}</span><button class="del-comment" onclick="deleteHistory(${h.id})" title="Delete">&times;</button></div>
       </div></div>`});
   });
-  // Comments
   (t.comments||[]).forEach(c=>{
     const bodyHtml=formatMentions(esc(c.body));
     items.push({time:c.created_at,html:`
@@ -593,11 +662,11 @@ function buildTimeline(t){
         <div class="tl-text">${bodyHtml}</div>
       </div></div>`});
   });
-  // Attachments
   (t.attachments||[]).forEach(a=>{
+    const fileUrl=storageUrl(a.filename);
     items.push({time:a.created_at,html:`
       <div class="tl-item"><div class="tl-icon file-icon">&#128206;</div><div class="tl-body">
-        <div class="tl-header"><span class="tl-author">${esc(a.uploaded_by)}</span><span class="tl-action">attached</span><a href="/uploads/${encodeURIComponent(a.filename)}" download="${esc(a.original_name)}" style="color:var(--blue);text-decoration:none;font-size:12px">${esc(a.original_name)}</a><span class="tl-time">${fmtTime(a.created_at)}</span><button class="del-comment" onclick="deleteAttachment(${a.id})" title="Delete attachment">&times;</button></div>
+        <div class="tl-header"><span class="tl-author">${esc(a.uploaded_by)}</span><span class="tl-action">attached</span><a href="${fileUrl}" download="${esc(a.original_name)}" style="color:var(--blue);text-decoration:none;font-size:12px">${esc(a.original_name)}</a><span class="tl-time">${fmtTime(a.created_at)}</span><button class="del-comment" onclick="deleteAttachment(${a.id})" title="Delete attachment">&times;</button></div>
       </div></div>`});
   });
 
@@ -615,18 +684,14 @@ function formatMentions(html){
 }
 
 // ===== STATUS CHANGE (requires comment) =====
-// Called from the inline status dropdown
 function quickChangeStatus(taskId,newStatus,oldStatus){
   if(newStatus===oldStatus)return;
   if(!reqUser()){
-    // revert the select
     const sel=document.querySelector(`#task-${taskId} .status-pill`);
     if(sel)sel.value=oldStatus;
     return;
   }
-  // Pre-fill the modal with the chosen status
   document.getElementById('sm-task-id').value=taskId;
-  // Replace the status display with a fixed label
   const container=document.getElementById('sm-status-display').parentNode;
   const old=document.getElementById('sm-status-display')||document.getElementById('sm-new-status');
   const inp=document.createElement('input');
@@ -634,23 +699,12 @@ function quickChangeStatus(taskId,newStatus,oldStatus){
   inp.style.cssText='background:#f8f9fa;width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px';
   inp.value=sLabel(newStatus);
   old.parentNode.replaceChild(inp,old);
-  // Store the actual value in a hidden field
   document.getElementById('sm-task-id').dataset.newStatus=newStatus;
   document.getElementById('sm-task-id').dataset.oldStatus=oldStatus;
   document.getElementById('sm-comment').value='';
   document.getElementById('status-modal').classList.remove('hidden');
 }
 
-function closeStatusModal(){
-  document.getElementById('status-modal').classList.add('hidden');
-  // Revert the inline select if user cancelled
-  const taskId=document.getElementById('sm-task-id').value;
-  const oldStatus=document.getElementById('sm-task-id').dataset.oldStatus;
-  if(taskId&&oldStatus){
-    const sel=document.querySelector(`#task-${taskId} .status-pill`);
-    if(sel)sel.value=oldStatus;
-  }
-}
 function closeStatusModal(){document.getElementById('status-modal').classList.add('hidden')}
 async function submitStatusChange(){
   const el=document.getElementById('sm-task-id');
@@ -658,18 +712,17 @@ async function submitStatusChange(){
   const newStatus=el.dataset.newStatus;
   const comment=document.getElementById('sm-comment').value.trim();
   if(!comment){alert('Please add a comment explaining the status change.');return}
-  await fetch(`/api/tasks/${taskId}/comments`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({author:user,body:`Status → ${sLabel(newStatus)}: ${comment}`})});
-  await fetch(`/api/tasks/${taskId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:newStatus,actor:user})});
+  await sb.from('comments').insert({task_id:taskId,author:user,body:`Status → ${sLabel(newStatus)}: ${comment}`});
+  await sb.from('activity_log').insert({task_id:taskId,actor:user,action:'status_change',detail:`${el.dataset.oldStatus} → ${newStatus}`});
+  await sb.from('tasks').update({status:newStatus,updated_at:new Date().toISOString()}).eq('id',taskId);
   document.getElementById('status-modal').classList.add('hidden');
   await refreshCurrent();
 }
 
 // ===== CHANGE OWNER =====
-// Called from the inline owner dropdown
 function quickChangeOwner(taskId,newOwner,oldOwner){
   if(newOwner===oldOwner)return;
   if(newOwner==='__new__'){
-    // Revert select, open add person modal
     const sel=document.querySelector(`#task-${taskId} .owner-select`);
     if(sel)sel.value=oldOwner;
     pendingNewPersonContext={taskId,oldOwner,target:'owner'};
@@ -690,7 +743,6 @@ function quickChangeOwner(taskId,newOwner,oldOwner){
 }
 function closeCO(){
   document.getElementById('co-modal').classList.add('hidden');
-  // Revert inline select
   const taskId=document.getElementById('co-task-id').value;
   const oldOwner=document.getElementById('co-task-id').dataset.oldOwner;
   if(taskId&&oldOwner){
@@ -704,11 +756,12 @@ async function submitCO(){
   const reason=document.getElementById('co-reason').value.trim();
   if(!reason){alert('Please explain why.');return}
   const oldOwner=document.getElementById('co-current').value;
-  await fetch(`/api/tasks/${taskId}/comments`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({author:user,body:`Changed owner from ${oldOwner} to ${newOwner}. Reason: ${reason}`})});
-  const task=await fetch('/api/tasks/'+taskId).then(r=>r.json());
+  await sb.from('comments').insert({task_id:taskId,author:user,body:`Changed owner from ${oldOwner} to ${newOwner}. Reason: ${reason}`});
+  await sb.from('activity_log').insert({task_id:taskId,actor:user,action:'owner_change',detail:`${oldOwner} → ${newOwner}`});
+  const {data:task}=await sb.from('tasks').select('*').eq('id',taskId).single();
   const inf=(task.informed||'').split(',').map(s=>s.trim()).filter(Boolean);
   if(!inf.includes(oldOwner))inf.push(oldOwner);
-  await fetch(`/api/tasks/${taskId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({owner:newOwner,informed:inf.filter(n=>n!==newOwner).join(', '),actor:user})});
+  await sb.from('tasks').update({owner:newOwner,informed:inf.filter(n=>n!==newOwner).join(', '),updated_at:new Date().toISOString()}).eq('id',taskId);
   closeCO();
   await refreshCurrent();
 }
@@ -729,44 +782,40 @@ function closeAP(){
 function submitAP(){
   const name=document.getElementById('ap-name').value.trim();
   const role=document.getElementById('ap-role').value.trim();
-  const email=document.getElementById('ap-email').value.trim();
-  const phone=document.getElementById('ap-phone').value.trim();
   if(!name){alert('Please enter a name.');return}
   if(!role){alert('Please enter a role.');return}
-  // Add to PEOPLE list
-  PEOPLE.push({name,role,email,phone});
+  PEOPLE.push({name,role});
   PEOPLE_NAMES.push(name);
   document.getElementById('ap-modal').classList.add('hidden');
-  // If triggered from an owner dropdown, proceed with the change owner flow
   if(pendingNewPersonContext){
     const ctx=pendingNewPersonContext;
     pendingNewPersonContext=null;
     quickChangeOwner(ctx.taskId,name,ctx.oldOwner);
   }else{
-    // Just refresh to pick up the new person in dropdowns
     refreshCurrent();
   }
 }
 
-// ===== DELETE COMMENT =====
+// ===== DELETE =====
 async function deleteComment(commentId){
   if(!reqUser())return;
-  await fetch('/api/comments/'+commentId,{method:'DELETE'});
+  await sb.from('comments').delete().eq('id',commentId);
   await refreshCurrent();
 }
 async function deleteAttachment(attachmentId){
   if(!reqUser())return;
-  await fetch('/api/attachments/'+attachmentId,{method:'DELETE'});
+  const {data:att}=await sb.from('attachments').select('filename').eq('id',attachmentId).single();
+  if(att)await sb.storage.from('attachments').remove([att.filename]);
+  await sb.from('attachments').delete().eq('id',attachmentId);
   await refreshCurrent();
 }
 async function deleteHistory(historyId){
   if(!reqUser())return;
-  await fetch('/api/activity/'+historyId,{method:'DELETE'});
+  await sb.from('activity_log').delete().eq('id',historyId);
   await refreshCurrent();
 }
 
 // ===== COMMENT & FILE UPLOAD =====
-// Track staged files per task
 const stagedFiles={};
 
 function onFilePick(taskId){
@@ -788,30 +837,33 @@ async function postComment(taskId){
   const commentText=ta.value.trim();
   const hasFile=!!stagedFiles[taskId];
   if(!commentText&&!hasFile)return;
-  // Post comment if there's text
   if(commentText){
-    await fetch(`/api/tasks/${taskId}/comments`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({author:user,body:commentText})});
+    await sb.from('comments').insert({task_id:taskId,author:user,body:commentText});
+    await sb.from('activity_log').insert({task_id:taskId,actor:user,action:'comment',detail:commentText.substring(0,100)});
     // Auto-add @mentioned people as collaborators
     const mentioned=[];
     for(const p of PEOPLE){
       if(commentText.includes('@'+p.name))mentioned.push(p.name);
     }
     if(mentioned.length){
-      const task=await fetch('/api/tasks/'+taskId).then(r=>r.json());
+      const {data:task}=await sb.from('tasks').select('*').eq('id',taskId).single();
       const current=(task.informed||'').split(',').map(s=>s.trim()).filter(Boolean);
       let changed=false;
       for(const m of mentioned){
         if(m!==task.owner&&!current.includes(m)){current.push(m);changed=true}
       }
       if(changed){
-        await fetch(`/api/tasks/${taskId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({informed:current.join(', '),actor:user})});
+        await sb.from('tasks').update({informed:current.join(', '),updated_at:new Date().toISOString()}).eq('id',taskId);
       }
     }
   }
-  // Upload file if staged
   if(hasFile){
-    const fd=new FormData();fd.append('file',stagedFiles[taskId]);fd.append('uploaded_by',user);
-    await fetch(`/api/tasks/${taskId}/attachments`,{method:'POST',body:fd});
+    const file=stagedFiles[taskId];
+    const safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+    const filename=`${Date.now()}-${safeName}`;
+    await sb.storage.from('attachments').upload(filename,file);
+    await sb.from('attachments').insert({task_id:taskId,filename,original_name:file.name,uploaded_by:user});
+    await sb.from('activity_log').insert({task_id:taskId,actor:user,action:'attachment',detail:`Uploaded: ${file.name}`});
     delete stagedFiles[taskId];
   }
   ta.value='';
@@ -846,19 +898,18 @@ async function submitNT(){
   const notes=document.getElementById('nt-notes').value.trim();
   const involved=Array.from(document.querySelectorAll('#nt-involved input:checked')).map(c=>c.value).filter(v=>v!==owner).join(', ');
   if(!desc){alert('Enter a description.');return}
-  await fetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({category:cat,city_comment:desc,owner,informed:involved,notes,actor:user})});
+  const {data:maxRow}=await sb.from('tasks').select('sort_order').eq('category',cat).order('sort_order',{ascending:false}).limit(1).single();
+  const sortOrder=(maxRow?.sort_order||0)+1;
+  const {data:newTask}=await sb.from('tasks').insert({category:cat,city_comment:desc,owner,informed:involved,notes,status:'pending',sort_order:sortOrder}).select().single();
+  if(newTask)await sb.from('activity_log').insert({task_id:newTask.id,actor:user,action:'created',detail:`Assigned to ${owner}`});
   closeNT();await refreshCurrent();
 }
 
-// ===== FILTERS (multi-select toggle) =====
+// ===== FILTERS =====
 function toggleFilter(setObj, status, containerId, renderFn){
   if(status==='all'){
-    // Toggle all: if all are active, deselect all; otherwise select all
-    if(setObj.size===ALL_STATUSES.length){
-      setObj.clear();
-    }else{
-      ALL_STATUSES.forEach(s=>setObj.add(s));
-    }
+    if(setObj.size===ALL_STATUSES.length)setObj.clear();
+    else ALL_STATUSES.forEach(s=>setObj.add(s));
   }else{
     if(setObj.has(status)) setObj.delete(status);
     else setObj.add(status);
@@ -868,14 +919,10 @@ function toggleFilter(setObj, status, containerId, renderFn){
 }
 function syncFilterUI(setObj, containerId){
   const container=document.getElementById(containerId);
-  const allBtn=container.querySelector('[data-f="all"]');
   container.querySelectorAll('[data-f]').forEach(btn=>{
     const s=btn.dataset.f;
-    if(s==='all'){
-      btn.classList.toggle('active', setObj.size===ALL_STATUSES.length);
-    }else{
-      btn.classList.toggle('active', setObj.has(s));
-    }
+    if(s==='all') btn.classList.toggle('active', setObj.size===ALL_STATUSES.length);
+    else btn.classList.toggle('active', setObj.has(s));
   });
 }
 function fMyStatus(s){toggleFilter(myStatuses,s,'my-filters',renderMyTasks)}
@@ -887,9 +934,9 @@ function filterOwner(name){
   showTab('all');loadAllTasks();
 }
 async function viewSingleTask(taskId){
-  const task=await fetch('/api/tasks/'+taskId).then(r=>r.json());
+  const tasks=await fetchTasksFull(sb.from('tasks').select('*').eq('id',taskId));
+  const task=tasks[0];
   if(!task)return;
-  // Switch to All Tasks tab without triggering loadAllTasks
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
   document.querySelector('.tab[data-tab="all"]').classList.add('active');
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
@@ -923,7 +970,8 @@ function reqUser(){if(!user||user==='Guest'){alert('Select your name first.');re
 function sLabel(s){return{pending:'New',in_progress:'In Progress',completed:'Completed',blocked:'Blocked'}[s]||s}
 function esc(s){if(!s)return'';const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function fmtTime(ds){
-  const d=new Date(ds+'Z');
+  if(!ds)return'';
+  const d=new Date(ds);
   const now=new Date();
   const diff=Math.floor((now-d)/1000);
   if(diff<60)return'just now';
