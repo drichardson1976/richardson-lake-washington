@@ -269,7 +269,16 @@
   <div class="page" id="page-documents">
     <div class="docs-page">
       <h2>Project Documents</h2>
-      <div class="dsec"><h3>City Correction Letters (Mar 2026)</h3><ul class="dl" id="corr-list"></ul></div>
+      <div class="dsec">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <h3 style="margin:0">City Correction Letters</h3>
+          <label class="btn" style="margin:0;cursor:pointer;font-size:12px;padding:4px 12px">
+            + Upload Correction Letter
+            <input type="file" id="corr-upload" accept=".pdf" style="display:none" onchange="uploadCorrection()">
+          </label>
+        </div>
+        <ul class="dl" id="corr-list"></ul>
+      </div>
       <div class="dsec"><h3>Submitted Permit Plans (Feb 2026)</h3><ul class="dl" id="plan-list"></ul></div>
       <div class="dsec"><h3>Documents from Comments</h3><ul class="dl" id="comment-docs-list"></ul></div>
     </div>
@@ -514,10 +523,19 @@ async function loadDocs(){
     'Richardson Residnece - DWD-CSC Plans.pdf',
     'Richardson Residnece - OSM workbook.pdf'
   ];
-  document.getElementById('corr-list').innerHTML=corrFiles.map(f=>{
+  // Also fetch uploaded corrections from Supabase Storage
+  const {data:uploaded}=await sb.storage.from('corrections').list('',{limit:100,sortBy:{column:'created_at',order:'desc'}});
+  const uploadedFiles=(uploaded||[]).filter(f=>f.name.endsWith('.pdf'));
+  const staticHtml=corrFiles.map(f=>{
     const url='/corrections/'+encodeURIComponent(f);
     return `<li><span>&#128196;</span><span class="dn">${esc(f)}</span><a href="${url}" target="_blank">View</a><a href="${url}" download>Download</a></li>`;
   }).join('');
+  const uploadedHtml=uploadedFiles.map(f=>{
+    const {data:urlData}=sb.storage.from('corrections').getPublicUrl(f.name);
+    const url=urlData.publicUrl;
+    return `<li><span>&#128196;</span><span class="dn">${esc(f.name)}<span style="color:var(--tl);font-size:11px;margin-left:8px">uploaded ${new Date(f.created_at).toLocaleDateString()}</span></span><a href="${url}" target="_blank">View</a><a href="${url}" download="${esc(f.name)}">Download</a><button class="del-comment" onclick="deleteCorrection('${esc(f.name)}')" title="Delete">&times;</button></li>`;
+  }).join('');
+  document.getElementById('corr-list').innerHTML=staticHtml+uploadedHtml;
   document.getElementById('plan-list').innerHTML=planFiles.map(f=>{
     const url='/submitted-plans/'+encodeURIComponent(f);
     return `<li><span>&#128206;</span><span class="dn">${esc(f)}</span><a href="${url}" target="_blank">View</a><a href="${url}" download>Download</a></li>`;
@@ -531,6 +549,23 @@ async function loadDocs(){
       const fileUrl=storageUrl(d.filename);
       return `<li><span>&#128206;</span><span class="dn">${esc(d.original_name)}<span style="color:var(--tl);font-size:11px;margin-left:8px">by ${esc(d.uploaded_by)} &middot; ${esc(d.tasks?.category||'')}</span></span><a href="#" onclick="viewSingleTask(${d.task_id});return false">View Task</a><a href="${fileUrl}" target="_blank">View</a><a href="${fileUrl}" download="${esc(d.original_name)}">Download</a></li>`;
     }).join('');
+}
+
+async function uploadCorrection(){
+  const inp=document.getElementById('corr-upload');
+  if(!inp.files.length)return;
+  const file=inp.files[0];
+  if(!file.name.toLowerCase().endsWith('.pdf')){alert('Please upload a PDF file.');inp.value='';return}
+  const {error}=await sb.storage.from('corrections').upload(file.name,file,{upsert:false});
+  if(error){alert('Upload failed: '+error.message);inp.value='';return}
+  inp.value='';
+  await loadDocs();
+}
+
+async function deleteCorrection(filename){
+  if(!confirm('Delete this correction letter?'))return;
+  await sb.storage.from('corrections').remove([filename]);
+  await loadDocs();
 }
 
 // ===== RENDER DASHBOARD =====
